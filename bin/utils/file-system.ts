@@ -69,3 +69,40 @@ export function executeCommand(command: string, cwd?: string): string {
     throw new Error(`Failed to execute command: ${command}`);
   }
 }
+
+export async function readDirectory(dirPath: string): Promise<string[]> {
+  try {
+    return await fs.readdir(dirPath);
+  } catch (error) {
+    console.error(`Error reading directory ${dirPath}:`, error);
+    return [];
+  }
+}
+
+export async function moveFile(src: string, dest: string): Promise<void> {
+  try {
+    const destDir = path.dirname(dest);
+    await createDirectory(destDir);
+    await fs.rename(src, dest);
+  } catch (error) {
+    console.error(`Error moving file ${src} to ${dest}:`, error);
+    throw error;
+  }
+}
+
+export async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function removeDirectory(dirPath: string): Promise<void> {
+  try {
+    await fs.rm(dirPath, { recursive: true, force: true });
+  } catch (error) {
+    console.error(`Error removing directory ${dirPath}:`, error);
+  }
+}

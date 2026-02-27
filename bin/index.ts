@@ -123,19 +123,19 @@ program
       ]);
 
       // Step 5: Architecture Selection
-      const { wantsArchitecture } = await inquirer.prompt([
-        {
-          type: "confirm",
-          name: "wantsArchitecture",
-          message: "Do you want to choose a specific architecture?",
-          default: false,
-        },
-      ]);
+      // Frameworks that need architecture selection
+      const frameworksNeedingArchitecture = [
+        "fastapi", "express", "fastify", "flask",  // Backend/Microframeworks
+        "fiber", "gin", "echo",                      // Go frameworks
+        "react", "svelte"                            // Frontend libraries
+      ];
 
       let architecture = "default";
-      if (wantsArchitecture) {
+      
+      // Only ask for architecture if framework needs it
+      if (frameworksNeedingArchitecture.includes(framework)) {
         const architectureChoices =
-          projectType === "backend" || projectType === "fullstack"
+          projectType === "backend" || language === "go"
             ? BACKEND_ARCHITECTURES
             : FRONTEND_ARCHITECTURES;
 
@@ -153,8 +153,8 @@ program
 
         architecture = selectedArchitecture;
       } else {
-        // Set default architecture
-        if (projectType === "backend") {
+        // Set default architecture for frameworks with predefined structure
+        if (projectType === "backend" || language === "go") {
           architecture = "layered";
         } else {
           architecture = "component-based";
@@ -245,6 +245,26 @@ program
         projectPath: finalProjectPath,
       });
 
+      // Install dependencies for React/Svelte after reorganization
+      if (framework === "react" || framework === "svelte") {
+        spinner = ora("Installing dependencies...").start();
+        const packageManager = detectPackageManager();
+        const installCmd = packageManager === "npm" 
+          ? "npm install"
+          : packageManager === "pnpm"
+          ? "pnpm install"
+          : packageManager === "bun"
+          ? "bun install"
+          : "yarn install";
+        
+        try {
+          execSync(installCmd, { cwd: finalProjectPath, stdio: "ignore" });
+          spinner.succeed("Dependencies installed!\n");
+        } catch (error) {
+          spinner.warn("Could not install dependencies automatically\n");
+        }
+      }
+
       spinner = ora("Installing skills...").start();
 
       // Install skills
@@ -264,17 +284,40 @@ program
         await createMCPConfig(finalProjectPath, selectedMCPs);
       }
 
-      // Handle Python venv
+      // Handle Python venv and Django setup
       if (language === "python") {
         spinner.text = "Creating Python virtual environment...";
         const hasUV = await checkCommandExists("uv");
 
         if (hasUV) {
           try {
-            execSync("uv venv", { cwd: finalProjectPath, stdio: "ignore" });
-            spinner.succeed("Python virtual environment created with UV!");
+            execSync("uv venv .venv", { cwd: finalProjectPath, stdio: "ignore" });
+            
+            // Special handling for Django
+            if (framework === "django") {
+              spinner.text = "Installing Django...";
+              execSync("uv pip install Django", { cwd: finalProjectPath, stdio: "ignore" });
+              
+              spinner.text = "Creating Django project structure...";
+              execSync("source .venv/bin/activate && django-admin startproject config .", { 
+                cwd: finalProjectPath, 
+                stdio: "ignore",
+                shell: "/bin/bash"
+              });
+              
+              spinner.text = "Running initial migrations...";
+              execSync("source .venv/bin/activate && python manage.py migrate", { 
+                cwd: finalProjectPath, 
+                stdio: "ignore",
+                shell: "/bin/bash"
+              });
+              
+              spinner.succeed("Django project created and configured!");
+            } else {
+              spinner.succeed("Python virtual environment created with UV!");
+            }
           } catch (error) {
-            spinner.warn("Could not create virtual environment automatically");
+            spinner.warn("Could not complete Python setup automatically. Please follow the README instructions.");
           }
         } else {
           spinner.warn(
@@ -291,13 +334,40 @@ program
 
       if (language === "python") {
         const hasUV = await checkCommandExists("uv");
-        if (hasUV) {
-          console.log(chalk.white("   source .venv/bin/activate  # Activate virtual environment"));
-          console.log(chalk.white("   uv pip install -e .        # Install dependencies"));
+        
+        if (framework === "django") {
+          // Django-specific instructions
+          if (hasUV) {
+            console.log(chalk.white("   source .venv/bin/activate        # Activate virtual environment"));
+            console.log(chalk.white("   python manage.py runserver       # Start development server"));
+            console.log(chalk.white(""));
+            console.log(chalk.white("   # Create superuser (optional):"));
+            console.log(chalk.white("   python manage.py createsuperuser"));
+            console.log(chalk.white(""));
+            console.log(chalk.white("   # Create a new app:"));
+            console.log(chalk.white('   python manage.py startapp core'));
+            console.log(chalk.white(""));
+            console.log(chalk.cyan("   🌐 Visit: http://127.0.0.1:8000"));
+            console.log(chalk.cyan("   🔐 Admin: http://127.0.0.1:8000/admin"));
+          } else {
+            console.log(chalk.white("   # Install UV first: curl -LsSf https://astral.sh/uv/install.sh | sh"));
+            console.log(chalk.white("   uv venv .venv"));
+            console.log(chalk.white("   source .venv/bin/activate"));
+            console.log(chalk.white("   uv pip install Django"));
+            console.log(chalk.white("   django-admin startproject config ."));
+            console.log(chalk.white("   python manage.py migrate"));
+            console.log(chalk.white("   python manage.py runserver"));
+          }
         } else {
-          console.log(chalk.white("   python -m venv .venv       # Create virtual environment"));
-          console.log(chalk.white("   source .venv/bin/activate  # Activate virtual environment"));
-          console.log(chalk.white("   pip install -e .           # Install dependencies"));
+          // Other Python frameworks
+          if (hasUV) {
+            console.log(chalk.white("   source .venv/bin/activate  # Activate virtual environment"));
+            console.log(chalk.white("   uv pip install -e .        # Install dependencies"));
+          } else {
+            console.log(chalk.white("   python -m venv .venv       # Create virtual environment"));
+            console.log(chalk.white("   source .venv/bin/activate  # Activate virtual environment"));
+            console.log(chalk.white("   pip install -e .           # Install dependencies"));
+          }
         }
       } else if (
         language === "typescript" ||
@@ -311,9 +381,9 @@ program
           const packageManager = detectPackageManager();
           const installCmd = getInstallCommand(packageManager);
           
-          // Frameworks with CLI already install dependencies
-          const cliFrameworks = ["nestjs", "nextjs", "react", "svelte", "sveltekit", "angular"];
-          if (!cliFrameworks.includes(framework)) {
+          // Frameworks that don't need installation step (already installed)
+          const frameworksWithDepsInstalled = ["nestjs", "nextjs", "react", "svelte", "sveltekit", "angular"];
+          if (!frameworksWithDepsInstalled.includes(framework)) {
             console.log(chalk.white(`   ${installCmd}              # Install dependencies`));
           }
           
