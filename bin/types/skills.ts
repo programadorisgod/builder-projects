@@ -100,6 +100,26 @@ export const FRAMEWORK_SKILLS: Record<string, Skill[]> = {
       path: "nextjs-15",
       description: "Next.js 15 best practices",
     },
+    {
+      name: "Clerk Next.js Patterns",
+      path: "clerk-nextjs-patterns",
+      description: "Authentication patterns with Clerk in Next.js",
+    },
+    {
+      name: "App Router Patterns",
+      path: "app-router-patterns",
+      description: "Next.js App Router best practices and patterns",
+    },
+    {
+      name: "Next.js Best Practices",
+      path: "next-bespracticas",
+      description: "Next.js development best practices",
+    },
+    {
+      name: "Supabase Auth",
+      path: "supabase-auth",
+      description: "Authentication with Supabase in Next.js",
+    },
   ],
   svelte: [
     {
